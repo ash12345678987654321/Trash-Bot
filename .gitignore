@@ -1,5 +1,6 @@
 .idea/
 auth.json
+mnist10/
 
 # Logs
 logs
