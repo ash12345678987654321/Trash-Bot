@@ -6,7 +6,9 @@ const fs = require('fs');
 
 const Jimp = require("jimp");
 
-const layers=[784,30,10];
+const formatter = require("./formatter");
+
+const layers=[784,100,30,10];
 const biases=[];
 const weights=[];
 
@@ -75,24 +77,32 @@ client.on("message", msg => {
             msg.channel.send("no image attached >.<");
         }
         else {
-            parse((msg.attachments).array()[0].url, msg.id).then(async function(ret) {
-                let value=ret[0],final_layer=ret[1];
+            let url=(msg.attachments).array()[0].url;
+            let ext=url.substr(url.lastIndexOf(".")+1);
 
-                await msg.channel.send("", {files: ["./mnist10/"+msg.id+".jpg"]});
+            if (ext==="png" || ext==="jpg" || ext==="jpeg") {
+                parse(url, msg.id).then(async function (ret) {
+                    let value = ret[0], final_layer = ret[1];
 
-                await msg.channel.send(msg.author.toString()+" This digit is "+value).then(sentEmbed => {
-                    sentEmbed.react("🛠️");
+                    await msg.channel.send("", {files: ["./mnist10/" + msg.id + ".jpg"]});
 
-                    let sent_logs=false;
+                    await msg.channel.send(msg.author.toString() + " This digit is " + value).then(sentEmbed => {
+                        sentEmbed.react("🛠️");
 
-                    const filter = (reaction, user) => reaction.emoji.name === '🛠️' && user.id === msg.author.id;
-                    const collector = sentEmbed.createReactionCollector(filter, { time: 600000 });
-                    collector.on('collect', r => {
-                        if (!sent_logs) msg.channel.send(final_layer);
-                        sent_logs=true;
+                        let sent_logs = false;
+
+                        const filter = (reaction, user) => reaction.emoji.name === '🛠️' && user.id === msg.author.id;
+                        const collector = sentEmbed.createReactionCollector(filter, {time: 600000});
+                        collector.on('collect', r => {
+                            if (!sent_logs) msg.channel.send(final_layer);
+                            sent_logs = true;
+                        });
                     });
                 });
-            });
+            }
+            else{
+                msg.channel.send("Cannot parse image :|");
+            }
         }
     }
 });
@@ -104,24 +114,37 @@ async function parse(url, id) {
     console.log(id);
 
     const image = await Jimp.read(url);
+    await image.resize(100,Jimp.AUTO);
 
-    await image.resize(28, 28);
-    await image.greyscale();
+    let r=image.bitmap.width;
+    let c=image.bitmap.height;
 
-    let layer = new Array(784);
-    for (let i=0;i<784;i++) layer[i]=new Array(1);
+    let grid=new Array(r);
+    for (let x=0;x<r;x++) grid[x]=new Array(c); //how do you initialize a 2d array tf
 
-    for (let x = 0; x < 28; x++) {
-        for (let y = 0; y < 28; y++) {
-            const val = scale(Jimp.intToRGBA(image.getPixelColor(x,y)).r);
-            const val_int=Math.floor(256*val);
-            image.setPixelColor(Jimp.rgbaToInt(val_int, val_int, val_int, 255, undefined),x,y);
-
-            layer[y*28+x][0]=val;
+    for (let x=0;x<r;x++){
+        for (let y=0;y<c;y++){
+            grid[x][y]=Jimp.intToRGBA(image.getPixelColor(x,y)).b;
         }
     }
 
-    image.write("./mnist10/"+id+".jpg");
+    grid=formatter(grid,r,c);
+
+    const mnist=new Jimp(28, 28, (err, image) => {
+        // this image is 28 x 28, every pixel is set to 0x00000000
+    });
+
+    let layer=new Array(784);
+
+    for (let x=0;x<28;x++){
+        for (let y=0;y<28;y++){
+            const val_int=Math.floor(256*grid[x][y]);
+            mnist.setPixelColor(Jimp.rgbaToInt(val_int, val_int, val_int, 255, undefined),x,y);
+            layer[y*28+x]=[grid[x][y]];
+        }
+    }
+
+    mnist.write("./mnist10/"+id+".jpg");
 
     //now we start the neural net
     for (let i=0;i<layers.length-1;i++){
@@ -135,7 +158,7 @@ async function parse(url, id) {
     let final_layer="```\n";
 
     for (let i=0;i<layer.length;i++){
-        final_layer+=i+" - "+Number.parseFloat(layer[i][0]*100).toFixed(6)+"%\n";
+        final_layer+=i+" - "+Number.parseFloat(layer[i][0]).toFixed(8)+"\n";
         if (layer[i][0]>best){
             best=layer[i][0];
             best_index=i;
@@ -145,12 +168,6 @@ async function parse(url, id) {
     final_layer+="```\n";
 
     return [best_index, final_layer];
-}
-
-function scale(intensity){ //this should return an integer
-    const temp=sigmoid((128-intensity)/20);
-    if (temp<0.4) return 0; //try to reduce some noise
-    else return temp;
 }
 
 function sigmoid(i){

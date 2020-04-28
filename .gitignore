@@ -1,6 +1,7 @@
 .idea/
 auth.json
 mnist10/
+outputs/
 
 # Logs
 logs
