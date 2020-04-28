@@ -60,8 +60,10 @@ client.on("message", msg => {
     if (message[0] === "ping") {
         msg.channel.send("ping: " + (Date.now() - msg.createdTimestamp) + " ms");
     } else if (message[0] === "on") {
+        if (!sunglasses.has(msg.author.id)) msg.channel.send(msg.author.toString()+" :sunglasses: on!");
         sunglasses.add(msg.author.id);
     } else if (message[0] === "off") {
+        if (sunglasses.has(msg.author.id)) msg.channel.send(msg.author.toString()+" :sunglasses: off!");
         sunglasses.delete(msg.author.id);
     } else if (message[0] === "help") {
         msg.channel.send("t!ping - ping the bot\n" +
@@ -73,9 +75,23 @@ client.on("message", msg => {
             msg.channel.send("no image attached >.<");
         }
         else {
-            parse((msg.attachments).array()[0].url, msg.id).then(async function(value) {
+            parse((msg.attachments).array()[0].url, msg.id).then(async function(ret) {
+                let value=ret[0],final_layer=ret[1];
+
                 await msg.channel.send("", {files: ["./mnist10/"+msg.id+".jpg"]});
-                await msg.channel.send(msg.author.toString()+" This digit is "+value);
+
+                await msg.channel.send(msg.author.toString()+" This digit is "+value).then(sentEmbed => {
+                    sentEmbed.react("🛠️");
+
+                    let sent_logs=false;
+
+                    const filter = (reaction, user) => reaction.emoji.name === '🛠️' && user.id === msg.author.id;
+                    const collector = sentEmbed.createReactionCollector(filter, { time: 600000 });
+                    collector.on('collect', r => {
+                        if (!sent_logs) msg.channel.send(final_layer);
+                        sent_logs=true;
+                    });
+                });
             });
         }
     }
@@ -116,16 +132,19 @@ async function parse(url, id) {
     let best=-1;
     let best_index=-1;
 
+    let final_layer="```\n";
+
     for (let i=0;i<layer.length;i++){
+        final_layer+=i+" - "+Number.parseFloat(layer[i][0]*100).toFixed(6)+"%\n";
         if (layer[i][0]>best){
             best=layer[i][0];
             best_index=i;
         }
     }
 
-    console.log(layer);
+    final_layer+="```\n";
 
-    return best_index;
+    return [best_index, final_layer];
 }
 
 function scale(intensity){ //this should return an integer
