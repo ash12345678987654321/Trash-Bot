@@ -1,7 +1,7 @@
 .idea/
 auth.json
 mnist10/
-outputs/
+Machine Learning/outputs/
 
 # Logs
 logs

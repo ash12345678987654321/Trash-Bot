@@ -82,11 +82,11 @@ client.on("message", msg => {
 
             if (ext==="png" || ext==="jpg" || ext==="jpeg") {
                 parse(url, msg.id).then(async function (ret) {
-                    let value = ret[0], final_layer = ret[1];
+                    let main = msg.author.toString() + " This digit is " + ret[0] + "\n", logs = ret[1];
 
                     await msg.channel.send("", {files: ["./mnist10/" + msg.id + ".jpg"]});
 
-                    await msg.channel.send(msg.author.toString() + " This digit is " + value).then(sentEmbed => {
+                    await msg.channel.send(main).then(sentEmbed => {
                         sentEmbed.react("🛠️");
 
                         let sent_logs = false;
@@ -94,7 +94,7 @@ client.on("message", msg => {
                         const filter = (reaction, user) => reaction.emoji.name === '🛠️' && user.id === msg.author.id;
                         const collector = sentEmbed.createReactionCollector(filter, {time: 600000});
                         collector.on('collect', r => {
-                            if (!sent_logs) msg.channel.send(final_layer);
+                            if (!sent_logs) sentEmbed.edit(main+logs);
                             sent_logs = true;
                         });
                     });
@@ -114,7 +114,7 @@ async function parse(url, id) {
     console.log(id);
 
     const image = await Jimp.read(url);
-    await image.resize(100,Jimp.AUTO);
+    await image.resize(50,Jimp.AUTO);
 
     let r=image.bitmap.width;
     let c=image.bitmap.height;
@@ -124,7 +124,7 @@ async function parse(url, id) {
 
     for (let x=0;x<r;x++){
         for (let y=0;y<c;y++){
-            grid[x][y]=Jimp.intToRGBA(image.getPixelColor(x,y)).b;
+            grid[x][y]=Jimp.intToRGBA(image.getPixelColor(x,y)).g;
         }
     }
 
